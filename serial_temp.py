@@ -3,70 +3,84 @@ from datetime import datetime
 import csv
 import os
 import glob
-
+import argparse
 
 def int_from_bytes(xbytes: bytes) -> int:
     return int.from_bytes(xbytes, 'big')
 
+def main():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Serial Data Logger")
+    parser.add_argument("--port", type=str, required=True, help="Serial port to read data from (e.g., /dev/ttyACM1)")
+    parser.add_argument("--path", type=str, required=True, help="Directory to store CSV files")
+    args = parser.parse_args()
 
-directory = os.getcwd() + "/"  # directory to store the data in
-last_csv_time = datetime.now()   # get the starting temperature
+    # Directory to store the data in
+    directory = os.path.abspath(args.path)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
-if not os.path.exists(directory):
-    os.makedirs(directory)
+    serial_ports = [args.port]  # Use the specified port
 
-serial_ports = glob.glob("/dev/ttyACM0")  # finding all serial ports with the name /dev/ttyACM
+    serial_instances = {}  # Storing the serial instances
 
-serial_instances = {}  # storing the serial instances
-
-for port in serial_ports:
-    ser = serial.Serial(port, 19200, timeout=1)
-    ser.flushInput()  # Clear any existing data in the input buffer
-    serial_instances[port] = ser  # add the port as an instance
-
-header = ["timestamp", "T1_leaf", "T2_leaf", "T1_air", "T2_air"]  # headers for the csv file
-start_timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S:%f")
-
-while True:  # loop to read the data from the ports
-
-    for port, ser in serial_instances.items():
-        ser_bytes = ser.readline()
-        # ser_bytes = ser_bytes.decode().strip()  # Convert bytes to string and remove leading/trailing whitespace
-        try:  # checking the format of the incoming data
-            if (ser_bytes[0] != 80 and ser_bytes[-1] != "#") or len(ser_bytes) == 0 or len(ser_bytes) != 11:  # *P3#
-                continue
+    for port in serial_ports:
+        try:
+            ser = serial.Serial(port, 19200, timeout=1)
+            ser.flushInput()  # Clear any existing data in the input buffer
+            serial_instances[port] = ser  # Add the port as an instance
         except Exception as e:
-            continue
+            print(f"Error opening serial port {port}: {e}")
+            return
 
-        file_prefix = chr(ser_bytes[0]) + str(ser_bytes[1])
-        print(file_prefix)
-        T1 = ser_bytes[2] + ser_bytes[3]/10
-        T2 = ser_bytes[4] + ser_bytes[5] / 10
-        T3 = ser_bytes[6] + ser_bytes[7] / 10
-        T4 = ser_bytes[8] + ser_bytes[9] / 10
-        print(T1, T2, T3, T4)
+    header = ["timestamp", "T1_leaf", "T2_leaf", "T1_air", "T2_air"]  # Headers for the CSV file
+    start_timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S:%f")
+    last_csv_time = datetime.now()
 
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f")
+    while True:  # Loop to read the data from the ports
+        for port, ser in serial_instances.items():
+            ser_bytes = ser.readline()
+            try:  # Checking the format of the incoming data
+                if (ser_bytes[0] != 80 and ser_bytes[-1] != 35) or len(ser_bytes) == 0 or len(ser_bytes) != 11:  # *P3#
+                    continue
+            except Exception as e:
+                continue
 
-        Specific_directory = directory + file_prefix
+            file_prefix = chr(ser_bytes[0]) + str(ser_bytes[1])
+            print(file_prefix)
 
-        current_time = datetime.now()
-        if current_time.hour in {0, 14} and current_time.hour != last_csv_time.hour:  # create new file every 12 hours
-            last_csv_time = datetime.now()
-            start_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f")
-            file_path = os.path.join(Specific_directory, f'{file_prefix}_{start_timestamp}.csv')
-            print("new file: ", start_timestamp)
+            # Parse temperature data
+            T1 = ser_bytes[2] + ser_bytes[3] / 10
+            T2 = ser_bytes[4] + ser_bytes[5] / 10
+            T3 = ser_bytes[6] + ser_bytes[7] / 10
+            T4 = ser_bytes[8] + ser_bytes[9] / 10
+            print(T1, T2, T3, T4)
 
-        if not os.path.exists(Specific_directory):
-            os.makedirs(Specific_directory)
+            # Timestamp for the data
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f")
 
-        file_path = os.path.join(Specific_directory, f'{file_prefix}_{start_timestamp}.csv')
-        # print(serial_instances)
+            # Create a directory for the file prefix
+            specific_directory = os.path.join(directory, file_prefix)
 
-        with open(file_path, "a") as f:  # writing the csv file
-            writer = csv.writer(f, delimiter=",")
+            current_time = datetime.now()
+            if current_time.hour in {0, 14} and current_time.hour != last_csv_time.hour:  # Create new file every 12 hours
+                last_csv_time = datetime.now()
+                start_timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S:%f")
+                print("New file: ", start_timestamp)
 
-            if os.path.getsize(file_path) == 0:  # for empty files write the header row
-                writer.writerow(header)
+            if not os.path.exists(specific_directory):
+                os.makedirs(specific_directory)
 
-            writer.writerow([timestamp, T1, T2, T3, T4])  # Write the data row containing timestamp, data, and a "0" for the "filtered" value
+            file_path = os.path.join(specific_directory, f"{file_prefix}_{start_timestamp}.csv")
+
+            # Write to the CSV file
+            with open(file_path, "a") as f:  # Writing the CSV file
+                writer = csv.writer(f, delimiter=",")
+
+                if os.path.getsize(file_path) == 0:  # For empty files write the header row
+                    writer.writerow(header)
+
+                writer.writerow([timestamp, T1, T2, T3, T4])  # Write the data row containing timestamp, data
+
+if __name__ == "__main__":
+    main()
