@@ -16,6 +16,7 @@ def main():
     args = parser.parse_args()
 
     # Directory to store the data in
+    print(args.path)
     directory = os.path.abspath(args.path)
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -47,7 +48,7 @@ def main():
                 continue
 
             file_prefix = chr(ser_bytes[0]) + str(ser_bytes[1])
-            print(file_prefix)
+            print("prefix:",file_prefix)
 
             # Parse temperature data
             T1 = ser_bytes[2] + ser_bytes[3] / 10
@@ -57,10 +58,10 @@ def main():
             print(T1, T2, T3, T4)
 
             # Timestamp for the data
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f")
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S:%f")
 
             # Create a directory for the file prefix
-            specific_directory = os.path.join(directory, file_prefix)
+            specific_directory = directory
 
             current_time = datetime.now()
             if current_time.hour in {0, 14} and current_time.hour != last_csv_time.hour:  # Create new file every 12 hours
@@ -72,6 +73,7 @@ def main():
                 os.makedirs(specific_directory)
 
             file_path = os.path.join(specific_directory, f"{file_prefix}_{start_timestamp}.csv")
+            print("file_path:",file_path)
 
             # Write to the CSV file
             with open(file_path, "a") as f:  # Writing the CSV file
