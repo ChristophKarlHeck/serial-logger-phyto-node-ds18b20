@@ -15,6 +15,8 @@ docker run --name serial-temp-logger-container \
   --restart=always \
   --device=/dev/ttyACM0:/dev/ttyACM0 \
   -v /media/chris/e110508e-b067-4ed5-87a8-5c548bdd8f77:/media/chris/e110508e-b067-4ed5-87a8-5c548bdd8f77 \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
   -d \
   serial-temp-logger:latest \
   --port /dev/ttyACM0 --path /media/chris/e110508e-b067-4ed5-87a8-5c548bdd8f77
